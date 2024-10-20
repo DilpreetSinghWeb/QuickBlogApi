@@ -17,9 +17,6 @@ server.use("/user",userRouter);
 server.use("/product",productRouter);
 
 
-server.get("/",(req,res)=>{
-    res.send("server is up");
-})
 
 
 mongoose.connect(process.env.MONGO_URI).then(()=>{
