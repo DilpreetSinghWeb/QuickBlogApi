@@ -2,13 +2,15 @@ const { validationResult } = require("express-validator");
 const Users = require("../models/UserModel");
 const bcryptjs = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const UserOTPVerification = require("../models/UserOTPVerification");
-const nodemailer = require('nodemailer');
+const nodemailer = require("nodemailer");
+const cloudinary = require("../utils/cloudinary");
 const generateOTP = require("../generateOTP/generateOTP");
+
+const otpStore = {};
 
 async function getAllUsers(req, res) {
   try {
-    let data = await Users.find();
+    let data = await Users.find();//fetch all users form db
     res.status(200).json({ success: true, data });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -55,6 +57,12 @@ async function registerUser(req, res) {
       let err = errors.map((er) => er.msg);
       return res.status(400).json({ success: false, message: err[0] });
     }
+    const {name,email,password} = req.body;
+    const file = req.file;
+    const photoUpload = await cloudinary.uploader.upload(req.file.path, {
+      folder: "BlogWebsite/users",
+    });
+    
     let data = req.body;
     let existingUser = await Users.findOne({ email: data.email });
     if (existingUser) {
@@ -117,7 +125,6 @@ async function updatePassword(req, res) {
 
     if (password === confirmPassword) {
       const hashedPassword = await bcryptjs.hash(password, 10);
-      console.log(hashedPassword);
 
       let updatedUser = await Users.findByIdAndUpdate(
         existingUser._id,
@@ -126,7 +133,6 @@ async function updatePassword(req, res) {
         },
         { new: true }
       );
-      console.log(updatedUser);
 
       res.status(200).json({ success: true, user: updatedUser });
     }
@@ -135,36 +141,26 @@ async function updatePassword(req, res) {
   }
 }
 
-// const sendOTPVerificationEmail = async (to, otp) => {
-//   try {
-//     const otp = `${Math.floor(1000 + Math.random() * 9000)}`
-//     const mailOptions = {
-//       from: '"Maddison Foo Koch 👻" <maddison53@ethereal.email>',
-//       to,
-//       subject: "Verify Your Email",
-//       html: `<p>Your OTP code is: <b>${otp}</b></p>`
-//     };
+const sendOTP = async (req, res) => {
+  let result = validationResult(req);
+  let errors = result.errors;
+  if (errors.length != 0) {
+    let err = errors.map((er) => er.msg);
+    return res.status(400).json({ success: false, message: err[0] });
+  }
 
-//     const hashedOTP = await bcryptjs.hash(otp,saltRounds);
-//     new UserOTPVerification({
-//       userId:_id,
-//       otp:hashedOTP,
-//     })
+  const email = req.body.email;
+  const otp = generateOTP();
+  const expirationTime = Date.now() + 5 * 60 * 1000;
+  const expirationTimeFormatted = new Date(expirationTime).toLocaleTimeString();
 
-//     const info = await transporter.sendMail(mailOptions);
-
-//     console.log("Message sent: %s", info.messageId);
-//   } catch (error) {
-//     console.error("Error sending email: ", error);
-//   }
-
-const sendOTPVerificationEmail = async (email, otp) => {
   const transporter = nodemailer.createTransport({
-    host: "smtp.ethereal.email",
+    host: "smtp.gmail.com",
     port: 587,
+    secure: false,
     auth: {
-      user: "lester.hand@ethereal.email",
-      pass: "DWXRZQFDTjKwQE65bd",
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
     },
   });
 
@@ -172,14 +168,71 @@ const sendOTPVerificationEmail = async (email, otp) => {
     from: '"Your Site" <your_email@example.com>',
     to: email,
     subject: "Your OTP Verification Code",
-    html: `<p>Your OTP is <b>${otp}</b></p>`,
+    html: `
+     <p>Your OTP code is <b>${otp}</b>.</p>
+      <p>This OTP will expire in 5 minutes, at <b>${expirationTimeFormatted}</b>.</p>
+      <p>If you did not request this OTP, please ignore this email.</p>
+      `,
   };
-
   try {
     let info = await transporter.sendMail(mailOptions);
-    console.log("Message sent: %s", info.messageId);
+
+    otpStore[email] = {
+      otp: otp,
+      expiresAt: expirationTime,
+    };
+
+    res.status(200).json({ success: true, user: info });
   } catch (error) {
-    console.error("Error sending email: ", error);
+    res.status(500).json({ success: false, error: "Failed to send email" });
+  }
+};
+
+const verifyOtp = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    if (!otp) {
+      return res.status(400).json({
+        success: false,
+        message: " OTP is required.",
+      });
+    }
+
+    const storedOTPData = otpStore[email];
+    if (!storedOTPData) {
+      return res.status(404).json({
+        success: false,
+        message: "OTP request not found. Please request a new OTP.",
+      });
+    }
+    const currentTime = Date.now();
+    if (currentTime > storedOTPData.expiresAt) {
+      delete otpStore[email];
+      return res.status(400).json({
+        success: false,
+        message: "Your OTP has expired.",
+      });
+    }
+    if (otp !== storedOTPData.otp) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid OTP.",
+      });
+    }
+
+    delete otpStore[email];
+
+    return res.status(200).json({
+      success: true,
+      message: "OTP verified successfully.",
+    });
+  } catch (error) {
+    
+    return res.status(500).json({
+      success: false,
+      message: "An unexpected error occurred.",
+    });
   }
 };
 
@@ -189,5 +242,6 @@ module.exports = {
   loginUser,
   verifyToken,
   updatePassword,
-  sendOTPVerificationEmail
+  sendOTP,
+  verifyOtp,
 };

@@ -11,6 +11,7 @@ const productSchema = new mongoose.Schema(
       type: String,
       default: "",
       trim: true,
+      required: true,
     },
     author: {
       type: String,
@@ -21,11 +22,29 @@ const productSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
-    imageUrl: {
-      type: String,
-      trim: true,
+    image: {
+      url: {
+        type: String,
+        trim: true,
+        required: true,
+      },
+      public_id: {
+        type: String,
+        trim: true,
+      },
+      originalFilename: {
+        type: String,
+        trim: true,
+      },
+    },
+    comments: [{ type: mongoose.Schema.Types.ObjectId, ref: "Comment" }],
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "users",
+      required: true,
     },
   },
+
   {
     timestamps: true,
   }

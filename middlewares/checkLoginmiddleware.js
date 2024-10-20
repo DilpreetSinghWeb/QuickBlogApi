@@ -3,25 +3,28 @@ const Users = require("../models/UserModel");
 
 async function checkLogin(req, res, next) {
   try {
-    let header = req.headers.authorization;
+    const header = req.headers.authorization;
     if (!header) {
       return res.status(401).json({ success: false, message: "No header provided" });
     }
 
-    let token = header.split(" ")[1];
+    const token = header.split(" ")[1];
     if (!token) {
-        res.status(401).json({ success: false, message: "No token provided" });
+      return res.status(401).json({ success: false, message: "No token provided" });
     }
 
-    let { userId } = jwt.verify(token, "thisismysecretkey"); 
-    let user = await Users.findById(userId);
+    const { userId } = jwt.verify(token, "thisismysecretkey"); 
+    const user = await Users.findById(userId);
+     // Exclude password
+
     if (!user) {
-        return res.status(403).json({ success: false, message: "You are not allowed to access this" });
+      return res.status(403).json({ success: false, message: "You are not allowed to access this" });
     }
-
-    next();
+    
+    req.user = user; 
+    next(); // Proceed to the next middleware or route handler
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    return res.status(500).json({ success: false, error: error.message });
   }
 }
 

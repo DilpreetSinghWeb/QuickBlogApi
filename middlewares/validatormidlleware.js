@@ -5,7 +5,7 @@ let validator = [
       .withMessage("name must be a string")
       .notEmpty()
       .withMessage("name must not be empty")
-      .isLength({ min: 8, max: 22 })
+      .isLength({ min: 3, max: 22 })
       .withMessage("The length must b 8 to 22 char long"),
     body("email")
       .isString()

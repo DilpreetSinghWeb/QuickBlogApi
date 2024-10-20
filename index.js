@@ -3,11 +3,12 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const userRouter = require("./routers/UserRouter");
 const productRouter = require("./routers/ProductRouter");
+const cloudinary = require("./utils/cloudinary")
 require('dotenv').config()
 
 
 const server = express();
-const port = process.env.PORT;
+const port = process.env.PORT || 8000;
 
 server.use(express.json());
 server.use(cors());
